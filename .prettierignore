@@ -1,0 +1,9 @@
+composer.lock
+.env*
+pnpm-lock.yaml
+.prettierrc
+.git/
+node_modules/
+public/
+storage/
+vendor/
