@@ -1,4 +1,4 @@
-name: tests
+name: Tests
 
 on:
   push:
@@ -6,14 +6,11 @@ on:
       - develop
       - main
   pull_request:
-    branches:
-      - develop
-      - main
 
 jobs:
   ci:
     runs-on: ubuntu-latest
-    environment: Testing
+    environment: develop
 
     steps:
       - name: Checkout
@@ -22,23 +19,38 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
-          tools: composer:v2
-          coverage: xdebug
+          php-version: '8.4'
+          coverage: none
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
 
       - name: Install Node Dependencies
-        run: npm i
+        run: pnpm install
 
       - name: Add Flux Credentials Loaded From ENV
         run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
 
-      - name: Install Dependencies
+      - name: Install PHP Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Copy Environment File
@@ -48,7 +60,7 @@ jobs:
         run: php artisan key:generate
 
       - name: Build Assets
-        run: npm run build
+        run: pnpm run build
 
       - name: Run Tests
-        run: ./vendor/bin/pest
+        run: vendor/bin/pest
