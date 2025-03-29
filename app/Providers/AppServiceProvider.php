@@ -32,21 +32,15 @@ class AppServiceProvider extends ServiceProvider
         $this->prohibitDestructiveCommandsFromRunning();
     }
 
-    /**
-     * @return void
-     */
     private function applySensiblePasswordDefaults(): void
     {
         Password::defaults(
-            fn() => $this->app->isProduction()
+            fn () => $this->app->isProduction()
                 ? $this->passwordDefaults()
                 : null
         );
     }
 
-    /**
-     * @return Password
-     */
     private function passwordDefaults(): Password
     {
         return Password::min(size: 8)
@@ -57,35 +51,23 @@ class AppServiceProvider extends ServiceProvider
             ->uncompromised();
     }
 
-    /**
-     * @return void
-     */
     private function configureExceptions(): void
     {
         RequestException::dontTruncate();
     }
 
-    /**
-     * @return void
-     */
     protected function configureModels(): void
     {
-        Model::shouldBeStrict(!app()->isProduction());
+        Model::shouldBeStrict(! app()->isProduction());
 
         Model::unguard();
     }
 
-    /**
-     * @return void
-     */
     protected function ensureDatesAreImmutable(): void
     {
         Date::use(handler: CarbonImmutable::class);
     }
 
-    /**
-     * @return void
-     */
     private function prohibitDestructiveCommandsFromRunning(): void
     {
         DB::prohibitDestructiveCommands(app()->isProduction());
