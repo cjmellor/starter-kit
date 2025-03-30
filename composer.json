@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "cjmellor/starer-kit",
+    "name": "cjmellor/starter-kit",
     "type": "project",
     "description": "An opinionated starter kit based off the official Laravel starter kit for Livewire.",
     "keywords": [
