@@ -26,3 +26,10 @@ laravel new <app-name> --using=cjmellor/starter-kit
   - Configured query logging for local development
   - Set up model strictness and prevention of lazy loading
   - Added performance optimization settings
+
+## Features
+
+### Authorization
+During the installation process, you'll be prompted to include Authorization. When selected, this option automatically sets up a comprehensive authentication structure including:
+- Role and Permission models with migrations
+- Basic role assignments (Owner, Member)
