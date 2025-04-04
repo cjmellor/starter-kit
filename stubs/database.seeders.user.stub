@@ -1,0 +1,45 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\UserRole;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+
+class UserSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $users = [
+            [
+                'name' => 'Super Admin User',
+                'email' => 'superadmin@example.com',
+                'role' => UserRole::SuperAdmin,
+            ],
+            [
+                'name' => 'Admin User',
+                'email' => 'admin@example.com',
+                'role' => UserRole::Admin,
+            ],
+            [
+                'name' => 'Member User',
+                'email' => 'member@example.com',
+                'role' => UserRole::Member,
+            ],
+        ];
+
+        collect($users)->each(function ($user) {
+            User::factory()
+                ->hasAttached(Role::firstWhere('name', $user['role']->value))
+                ->create([
+                    'name' => $user['name'],
+                    'email' => $user['email'],
+                    'password' => bcrypt('password'),
+                ]);
+        });
+    }
+}
