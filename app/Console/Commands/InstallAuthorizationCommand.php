@@ -91,7 +91,7 @@ class InstallAuthorizationCommand extends Command
     private function installAuthorizationPackage(): void
     {
         $this->runProcess(
-            command: 'composer require directorytree/authorization',
+            command: 'composer require directorytree/authorization --quiet --no-interaction',
             infoMessage: 'Installing authorization package'
         );
     }
