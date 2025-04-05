@@ -1,3 +1,5 @@
+![ChatGPT Image Apr 5, 2025 at 04_53_38 PM](https://github.com/user-attachments/assets/f362a7b7-b488-4fdd-bfad-63e120ffca07)
+
 # Laravel (Opionionated) Starter Kit
 
 A modern Laravel starter kit with opinionated defaults and essential tooling for rapid application development.
