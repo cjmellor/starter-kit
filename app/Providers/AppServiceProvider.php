@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -25,14 +26,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->applySensiblePasswordDefaults();
+        $this->configurePasswords();
         $this->configureExceptions();
         $this->configureModels();
-        $this->ensureDatesAreImmutable();
-        $this->prohibitDestructiveCommandsFromRunning();
+        $this->configureDates();
+        $this->configureCommands();
+        $this->configureUrls();
     }
 
-    private function applySensiblePasswordDefaults(): void
+    private function configurePasswords(): void
     {
         Password::defaults(
             fn () => $this->app->isProduction()
@@ -58,18 +60,27 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureModels(): void
     {
-        Model::shouldBeStrict(! app()->isProduction());
+        Model::automaticallyEagerLoadRelationships();
+
+        Model::shouldBeStrict();
 
         Model::unguard();
     }
 
-    protected function ensureDatesAreImmutable(): void
+    protected function configureDates(): void
     {
         Date::use(handler: CarbonImmutable::class);
     }
 
-    private function prohibitDestructiveCommandsFromRunning(): void
+    private function configureCommands(): void
     {
         DB::prohibitDestructiveCommands(app()->isProduction());
+    }
+
+    private function configureUrls(): void
+    {
+        URL::forceScheme(scheme: 'https');
+
+        URL::useOrigin(root: config(key: 'app.url'));
     }
 }
