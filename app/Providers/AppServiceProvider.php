@@ -62,7 +62,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::automaticallyEagerLoadRelationships();
 
-        Model::shouldBeStrict();
+        // Might not need this as the above function will always load relationships.
+        Model::shouldBeStrict(app()->isLocal());
 
         Model::unguard();
     }
