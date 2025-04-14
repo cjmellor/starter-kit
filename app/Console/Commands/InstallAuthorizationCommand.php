@@ -17,32 +17,13 @@ use function Laravel\Prompts\warning;
 
 class InstallAuthorizationCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'auth:install';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Install and configure role-based authorization with permissions';
 
-    /**
-     * The filesystem instance.
-     */
-    protected Filesystem $files;
-
-    /**
-     * Create a new command instance.
-     */
-    public function __construct(Filesystem $files)
-    {
+    public function __construct(
+        protected Filesystem $files
+    ) {
         parent::__construct();
-        $this->files = $files;
     }
 
     /**
@@ -91,7 +72,7 @@ class InstallAuthorizationCommand extends Command
     private function installAuthorizationPackage(): void
     {
         $this->runProcess(
-            command: 'composer require directorytree/authorization --quiet --no-interaction',
+            command: ['composer', 'require', 'directorytree/authorization', '--quiet', '--no-interaction'],
             infoMessage: 'Installing authorization package'
         );
     }
@@ -103,10 +84,6 @@ class InstallAuthorizationCommand extends Command
      */
     private function runProcess(string|array $command, ?string $infoMessage = null): void
     {
-        if ($infoMessage) {
-            info($infoMessage);
-        }
-
         $result = Process::run($command);
 
         if ($result->failed()) {
@@ -120,9 +97,9 @@ class InstallAuthorizationCommand extends Command
 
     private function runMigrations(): void
     {
+        info('Running migrations');
         $this->runProcess(
-            command: 'php artisan migrate --force --no-interaction',
-            infoMessage: 'Running migrations'
+            command: 'php artisan migrate --force --no-interaction'
         );
     }
 
