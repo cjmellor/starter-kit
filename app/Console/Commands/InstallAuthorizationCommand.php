@@ -7,6 +7,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Process\Exceptions\ProcessFailedException;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 
@@ -17,7 +18,18 @@ use function Laravel\Prompts\warning;
 
 class InstallAuthorizationCommand extends Command
 {
+    private const string USER_ROLE_ENUM_STUB = 'stubs/enums.user_role.stub';
+
+    private const string ROLE_MODEL_STUB = 'stubs/models.role.stub';
+
+    private const string ROLE_FACTORY_STUB = 'stubs/database.factories.role_factory.stub';
+
+    private const string USER_SEEDER_STUB = 'stubs/database.seeders.user.stub';
+
+    private const string DEFAULT_ROLES_MIGRATION_STUB = 'stubs/database.migrations.create_default_roles.stub';
+
     protected $signature = 'auth:install';
+
     protected $description = 'Install and configure role-based authorization with permissions';
 
     public function __construct(
@@ -35,7 +47,9 @@ class InstallAuthorizationCommand extends Command
             label: 'Do you want to install Authorization into your app?',
             default: false
         )) {
-            return 1;
+            warning('Authorization installation skipped.');
+
+            return self::SUCCESS;
         }
 
         info(message: 'Setting up Authorization');
@@ -53,27 +67,26 @@ class InstallAuthorizationCommand extends Command
         } catch (ProcessFailedException $e) {
             error(message: "Process failed: {$e->getMessage()} \nOutput:\n{$e->result->output()}\nError Output:\n{$e->result->errorOutput()}");
 
-            return 1;
+            return self::FAILURE;
         } catch (FileNotFoundException $e) {
             error(message: "File not found: {$e->getMessage()}");
 
-            return 1;
+            return self::FAILURE;
         } catch (Exception $e) {
             error(message: "An error occurred: {$e->getMessage()}");
 
-            return 1;
+            return self::FAILURE;
         }
 
         info(message: 'Authorization setup completed.');
 
-        return 0;
+        return self::SUCCESS;
     }
 
     private function installAuthorizationPackage(): void
     {
         $this->runProcess(
-            command: ['composer', 'require', 'directorytree/authorization', '--quiet', '--no-interaction'],
-            infoMessage: 'Installing authorization package'
+            command: 'composer require directorytree/authorization'
         );
     }
 
@@ -82,7 +95,7 @@ class InstallAuthorizationCommand extends Command
      *
      * @throws ProcessFailedException
      */
-    private function runProcess(string|array $command, ?string $infoMessage = null): void
+    private function runProcess(string|array $command): void
     {
         $result = Process::run($command);
 
@@ -98,59 +111,49 @@ class InstallAuthorizationCommand extends Command
     private function runMigrations(): void
     {
         info('Running migrations');
+
         $this->runProcess(
             command: 'php artisan migrate --force --no-interaction'
         );
     }
 
     /**
-     * @throws FileNotFoundException
+     * Create the UserRole enum from a stub.
      */
     private function createUserRoleEnum(): void
     {
         info('Creating UserRole Enum');
 
-        $stubPath = base_path(path: 'stubs/enums.user_role.stub');
-        $targetPath = app_path(path: 'Enums/UserRole.php');
+        $this->copyStub(
+            stubRelativePath: self::USER_ROLE_ENUM_STUB,
+            targetPath: app_path(path: 'Enums/UserRole.php'),
+            existsMessage: 'UserRole Enum already exists, skipping creation.'
+        );
+    }
 
-        // Check if stub exists
-        if ($this->files->missing($stubPath)) {
-            throw new FileNotFoundException(message: "Stub file not found at {$stubPath}");
-        }
+    /**
+     * Copy a stub file to a target location if it doesn't already exist.
+     */
+    private function copyStub(string $stubRelativePath, string $targetPath, ?string $existsMessage = null): void
+    {
+        $stubPath = base_path($stubRelativePath);
 
-        // Create Enums directory if it doesn't exist
-        $enumsDirectory = app_path(path: 'Enums');
+        throw_if(
+            condition: $this->files->missing($stubPath),
+            exception: new FileNotFoundException("Target file not found at {$stubPath}")
+        );
 
-        if ($this->files->missing($enumsDirectory)) {
-            $this->files->makeDirectory($enumsDirectory);
-        }
-
-        // Check if target file already exists
         if ($this->files->exists($targetPath)) {
-            error('UserRole Enum already exists, skipping creation.');
+            if ($existsMessage) {
+                error($existsMessage);
+            }
 
             return;
         }
 
-        // Copy stub to target location
+        $this->files->ensureDirectoryExists(dirname($targetPath));
+
         $this->files->copy($stubPath, $targetPath);
-    }
-
-    /**
-     * Modify the content of a file using a callback.
-     *
-     * @throws FileNotFoundException
-     */
-    private function modifyFile(string $path, callable $callback): void
-    {
-        if ($this->files->missing($path)) {
-            throw new FileNotFoundException(message: "File does not exist at path {$path}.");
-        }
-
-        $content = $this->files->get(path: $path);
-        $newContent = $callback($content);
-
-        $this->files->put(path: $path, contents: $newContent);
     }
 
     private function addAuthorizableTraitToUserModel(): void
@@ -171,38 +174,48 @@ class InstallAuthorizationCommand extends Command
     }
 
     /**
+     * Modify the content of a file using a callback.
+     *
+     * @throws FileNotFoundException
+     */
+    private function modifyFile(string $path, callable $callback): void
+    {
+        throw_if(
+            condition: $this->files->missing($path),
+            exception: new FileNotFoundException("File does not exist at path {$path}.")
+        );
+
+        $content = $this->files->get(path: $path);
+        $newContent = $callback($content);
+
+        $this->files->put(path: $path, contents: $newContent);
+    }
+
+    /**
      * @throws FileNotFoundException
      */
     private function setupRoleModelAndFactory(): void
     {
         info('Setting up Role model and factory');
 
-        $stubPath = base_path(path: 'stubs/models.role.stub');
-        $targetPath = app_path(path: 'Models/Role.php');
-
-        if ($this->files->missing($stubPath)) {
-            throw new FileNotFoundException(message: "Stub file not found at {$stubPath}");
-        }
-
-        if ($this->files->exists($targetPath)) {
-            error('Role model already exists, skipping creation.');
-
-            return;
-        }
-
-        $this->files->copy($stubPath, $targetPath);
+        $this->copyStub(
+            stubRelativePath: self::ROLE_MODEL_STUB,
+            targetPath: app_path('Models/Role.php'),
+            existsMessage: 'Role model already exists, skipping creation.'
+        );
 
         $this->createRoleFactory();
     }
 
     private function createRoleFactory(): void
     {
-        $stubPath = base_path('stubs/database.factories.role_factory.stub');
-        $targetPath = database_path('factories/RoleFactory.php');
+        $stubPath = base_path(path: self::ROLE_FACTORY_STUB);
+        $targetPath = database_path(path: 'factories/RoleFactory.php');
 
-        if ($this->files->missing($stubPath)) {
-            throw new FileNotFoundException("Stub file not found at {$stubPath}");
-        }
+        throw_if(
+            condition: $this->files->missing($stubPath),
+            exception: new FileNotFoundException(message: "Stub file not found at {$stubPath}")
+        );
 
         if ($this->files->exists($targetPath)) {
             return;
@@ -213,68 +226,86 @@ class InstallAuthorizationCommand extends Command
 
     private function createMigrationForDefaultRoles(): void
     {
-        $this->runProcess(
-            command: 'php artisan make:migration create_default_roles',
-            infoMessage: 'Creating migration for default roles'
+        info('Creating migration for default roles');
+
+        // Generate a timestamped filename similar to how Laravel does it
+        $timestamp = Date::now()->format('Y_m_d_His');
+        $migrationName = "{$timestamp}_create_default_roles.php";
+        $targetPath = database_path("migrations/{$migrationName}");
+
+        $this->copyStub(
+            stubRelativePath: self::DEFAULT_ROLES_MIGRATION_STUB,
+            targetPath: $targetPath,
+            existsMessage: 'Default roles migration seems to already exist, skipping creation.'
         );
-
-        $migrationFiles = $this->files->glob(pattern: database_path(path: 'migrations/*_create_default_roles.php'));
-
-        if (empty($migrationFiles)) {
-            throw new FileNotFoundException(message: 'Default roles migration file not found after creation.');
-        }
-
-        $this->modifyFile(path: end($migrationFiles), callback: function (string $content): string {
-            // Replace all imports with the ones we want in the correct order
-            $content = preg_replace(
-                pattern: "/use.*?;\n(use.*?;\n)*/s",
-                replacement: "use App\Enums\UserRole;\nuse App\Models\Role;\nuse Illuminate\Database\Migrations\Migration;\n",
-                subject: $content
-            );
-
-            // Replace the up method
-            $content = preg_replace(
-                pattern: "/public function up\(\): void\n    \{.*?\n    }/s",
-                replacement: "public function up(): void\n    {\n        foreach (UserRole::cases() as \$role) {\n            Role::create([\n                'name' => \$role->value,\n                'label' => ucfirst(\$role->value),\n            ]);\n        }\n    }",
-                subject: $content
-            );
-
-            // Remove the down method
-            return preg_replace(
-                pattern: "/\s*\/\*\*\s*\*\s*Reverse the migrations\.\s*\*\/\s*public function down\(\): void\s*\{[^}]*}/s",
-                replacement: '',
-                subject: $content
-            );
-        });
     }
 
     private function setupCustomRoleModelInProvider(): void
     {
-        $this->modifyFile(app_path(path: 'Providers/AppServiceProvider.php'), function (string $content): string {
-            // First, remove all the imports we want to reorder
-            $content = preg_replace(
-                pattern: "/use App\\\\Models\\\\Role;\n|use Carbon\\\\CarbonImmutable;\n|use DirectoryTree\\\\Authorization\\\\Authorization;\n/",
-                replacement: '',
-                subject: $content
-            );
+        info('Configuring AppServiceProvider for custom Role model');
 
-            // Then add them back in the correct order after the namespace, ensuring no extra newline
-            $content = Str::replaceFirst(
-                search: "namespace App\Providers;\n\n",
-                replace: "namespace App\Providers;\n\nuse App\Models\Role;\nuse Carbon\CarbonImmutable;\nuse DirectoryTree\Authorization\Authorization;\n",
-                subject: $content
-            );
+        $this->modifyFile(app_path(path: 'Providers/AppServiceProvider.php'), callback: function (string $content): string {
+            $namespaceLine = "namespace App\Providers;";
+            $useStatementsToAdd = [];
 
-            // Add the Authorization configuration if it doesn't exist
-            if (Str::doesntContain(
-                haystack: $content,
-                needles: 'Authorization::useRoleModel(roleModel: Role::class);'
-            )) {
-                $content = Str::replaceFirst(
-                    search: "public function boot(): void\n    {",
-                    replace: "public function boot(): void\n    {\n        Authorization::useRoleModel(roleModel: Role::class);\n",
-                    subject: $content
-                );
+            // Check for required use statements
+            if (Str::doesntContain(haystack: $content, needles: 'use App\Models\Role;')) {
+                $useStatementsToAdd[] = 'use App\Models\Role;';
+            }
+
+            if (Str::doesntContain(haystack: $content, needles: 'use DirectoryTree\Authorization\Authorization;')) {
+                $useStatementsToAdd[] = 'use DirectoryTree\Authorization\Authorization;';
+            }
+
+            // Add missing use statements after the namespace declaration
+            if (! empty($useStatementsToAdd)) {
+                // Find the first existing 'use' statement to insert before it, or insert after namespace if none exist
+                if (preg_match(pattern: '/^use\s+.+;/m', subject: $content, matches: $matches, flags: PREG_OFFSET_CAPTURE)) {
+                    $content = Str::substrReplace(
+                        string: $content,
+                        replace: implode(separator: "\n", array: $useStatementsToAdd)."\n",
+                        offset: $matches[0][1],
+                        length: 0,
+                    );
+                } else {
+                    // Insert after namespace if no use statements exist
+                    $content = Str::replaceFirst(
+                        search: $namespaceLine,
+                        replace: $namespaceLine."\n\n".implode(separator: "\n", array: $useStatementsToAdd),
+                        subject: $content
+                    );
+                }
+            }
+
+            // Ensure the Authorization configuration exists within the boot method
+            $bootMethodSignature = 'public function boot(): void';
+            $configLine = 'Authorization::useRoleModel(roleModel: Role::class);';
+            $indentedConfigLine = '        '.$configLine; // Assuming 8 spaces (2 tabs) indentation
+
+            // Check if the line already exists (allowing for slight variations in whitespace)
+            if (! Str::contains(
+                haystack: Str::replaceMatches(pattern: '/\s+/', replace: '', subject: $content),
+                needles: Str::replaceMatches(pattern: '/\s+/', replace: '', subject: $configLine))
+            ) {
+                // Find the boot method's opening brace
+                $bootMethodPosition = Str::position($content, $bootMethodSignature);
+                if ($bootMethodPosition !== false) {
+                    $openingBracePosition = Str::position(haystack: $content, needle: '{', offset: $bootMethodPosition);
+
+                    if ($openingBracePosition !== false) {
+                        // Insert the config line after the opening brace with a newline and indentation
+                        $content = Str::substrReplace(
+                            string: $content,
+                            replace: "\n".$indentedConfigLine,
+                            offset: $openingBracePosition + 1,
+                            length: 0,
+                        );
+                    } else {
+                        warning('Could not find opening brace for boot() method in AppServiceProvider.');
+                    }
+                } else {
+                    warning('Could not find boot() method signature in AppServiceProvider.');
+                }
             }
 
             return $content;
@@ -285,49 +316,18 @@ class InstallAuthorizationCommand extends Command
     {
         info('Setting up UserSeeder');
 
-        $stubPath = base_path('stubs/database.seeders.user.stub');
-        $targetPath = database_path('seeders/UserSeeder.php');
-
-        if ($this->files->missing($stubPath)) {
-            throw new FileNotFoundException("Stub file not found at {$stubPath}");
-        }
-
-        if ($this->files->exists($targetPath)) {
-            error('UserSeeder already exists, skipping creation.');
-
-            return;
-        }
-
-        $this->files->copy($stubPath, $targetPath);
-    }
-
-    private function updateDatabaseSeederFile(): void
-    {
-        $this->modifyFile(database_path(path: 'seeders/DatabaseSeeder.php'), function (string $content): string {
-            // Remove any existing use statements except WithoutModelEvents and Seeder
-            $content = preg_replace(
-                pattern: "/use (?!Illuminate\\\\Database\\\\Console\\\\Seeds\\\\WithoutModelEvents|Illuminate\\\\Database\\\\Seeder)[^;]+;\n/",
-                replacement: '',
-                subject: $content
-            );
-
-            // Replace run method content to call UserSeeder
-            $content = preg_replace(
-                pattern: "/public function run\(\): void\n {4}\{[^}]*}/s",
-                replacement: "public function run(): void\n    {\n        \$this->call([\n            UserSeeder::class,\n            // Add other seeders here if needed\n        ]);\n    }",
-                subject: $content
-            );
-
-            return $content;
-        });
+        $this->copyStub(
+            stubRelativePath: self::USER_SEEDER_STUB,
+            targetPath: database_path('seeders/UserSeeder.php'),
+            existsMessage: 'UserSeeder already exists, skipping creation.'
+        );
     }
 
     private function runSeedersIfNeeded(): void
     {
         if (confirm(label: 'Do you want to run the database seeders?')) {
             $this->runProcess(
-                command: 'php artisan db:seed',
-                infoMessage: 'Running database seeders'
+                command: 'php artisan db:seed'
             );
         } else {
             warning(message: 'You can run the seeders later by executing `php artisan db:seed`');

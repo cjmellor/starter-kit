@@ -46,11 +46,12 @@ class AppServiceProvider extends ServiceProvider
     private function passwordDefaults(): Password
     {
         return Password::min(size: 8)
-            // ->letters()
-            // ->mixedCase()
-            // ->numbers()
-            // ->symbols()
-            ->uncompromised();
+            ->max(size: 255);
+        // ->letters()
+        // ->mixedCase()
+        // ->numbers()
+        // ->symbols()
+        // ->uncompromised()
     }
 
     private function configureExceptions(): void
