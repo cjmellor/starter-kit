@@ -158,18 +158,31 @@ class InstallAuthorizationCommand extends Command
 
     private function addAuthorizableTraitToUserModel(): void
     {
-        $this->modifyFile(app_path(path: 'Models/User.php'), function (string $content): string {
-            $content = Str::replaceFirst(
-                search: "namespace App\Models;\n",
-                replace: "namespace App\Models;\n\nuse DirectoryTree\Authorization\Traits\Authorizable;",
-                subject: $content
-            );
+        $this->modifyFile(app_path('Models/User.php'), function (string $content): string {
+            $useStatement = 'use DirectoryTree\Authorization\Traits\Authorizable;';
+            
+            if (Str::doesntContain($content, $useStatement)) {
+                // Attempt to add the use statement after the namespace
+                $content = Str::replaceFirst(
+                    search: "namespace App\Models;\n",
+                    replace: "namespace App\Models;\n\n" . $useStatement,
+                    subject: $content
+                );
+            }
 
-            return Str::replaceFirst(
-                search: 'use HasFactory, Notifiable',
-                replace: 'use Authorizable, HasFactory, Notifiable',
-                subject: $content
-            );
+            $traitToAdd = 'Authorizable, ';
+            $traitListSearch = 'use HasFactory, Notifiable'; // Common default
+            $traitListSearchWithExisting = 'use Authorizable, HasFactory, Notifiable'; // Check if already added
+
+            if (Str::contains($content, $traitListSearch) && Str::doesntContain($content, $traitListSearchWithExisting)) {
+                 $content = Str::replaceFirst(
+                    search: $traitListSearch,
+                    replace: 'use ' . $traitToAdd . 'HasFactory, Notifiable',
+                    subject: $content
+                );
+            }
+
+            return $content;
         });
     }
 
